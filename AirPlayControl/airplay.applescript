@@ -2,7 +2,6 @@ use AppleScript version "2.4" -- Yosemite (10.10) or later
 use scripting additions
 
 on setAirplay(device_name)
-    say device_name
 
     tell application "System Events"
 
