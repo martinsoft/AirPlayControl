@@ -7,6 +7,7 @@
 //
 
 import Cocoa
+import Carbon
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -23,36 +24,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
         
         let deviceName = CommandLine.arguments[1]
-        var source = ""
         
-        source += "use AppleScript version \"2.4\" -- Yosemite (10.10) or later" + "\n"
-        source += "use scripting additions" + "\n"
-        source += "set device_name to \"" + deviceName + "\"" + "\n"
-        source += "say device_name" + "\n"
-        source += "tell application \"System Events\"" + "\n"
-        source += "  tell process \"SystemUIServer\"" + "\n"
-        source += "    set display_menu to menu bar item 1 of menu bar 1 whose description contains \"Displays Menu\"" + "\n"
-        source += "    click display_menu" + "\n"
-        source += "    set the_menu to menu 1 of result" + "\n"
-        source += "    delay 1.0" + "\n"
-        source += "    if menu item device_name of the_menu exists then" + "\n"
-        source += "      click menu item device_name of the_menu" + "\n"
-        source += "    else" + "\n"
-        source += "      key code 53" + "\n"            // Close the AirPlay menu again if not found
-        source += "    end if" + "\n"
-        source += "  end tell" + "\n"
-        source += "end tell" + "\n"
-        
-        let script = NSAppleScript(source: source)
-        var error: NSDictionary?
-        let result = script?.executeAndReturnError(&error)
-        
-        if result == nil {
-            print("Failed to change AirPlay device")
-            if (error != nil) {
-                print("\(error)")
+        if let scriptURL = Bundle.main.url(forResource: "airplay", withExtension: "applescript") {
+            var error: NSDictionary? = nil
+            let script = NSAppleScript(contentsOf: scriptURL, error: &error)
+
+            // Build event to invoke the 'run' handler in the script
+            let handler = NSAppleEventDescriptor.init(eventClass: AEEventClass(kASAppleScriptSuite),
+                                                      eventID: AEEventID(kASSubroutineEvent),
+                                                      targetDescriptor: NSAppleEventDescriptor.null(),
+                                                      returnID: AEReturnID(kAutoGenerateReturnID),
+                                                      transactionID: AETransactionID(kAnyTransactionID))
+            
+            
+            let params = NSAppleEventDescriptor.list()
+            params.insert(NSAppleEventDescriptor(string: deviceName), at: 0)
+            
+            handler.setDescriptor(params, forKeyword: keyDirectObject)
+            handler.setDescriptor(NSAppleEventDescriptor(string: "setAirplay"), forKeyword: AEKeyword(keyASSubroutineName))
+            
+            error = nil
+            let result = script?.executeAppleEvent(handler, error: &error)
+            
+            if result == nil {
+                print("Failed to change AirPlay device")
+                if (error != nil) {
+                    print("\(error)")
+                }
             }
         }
+        
         NSApplication.shared().terminate(self)
     }
 
