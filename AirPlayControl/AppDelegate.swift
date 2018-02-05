@@ -6,8 +6,8 @@
 //  Copyright © 2017 Martinsoft Limited. All rights reserved.
 //
 
+import Foundation
 import Cocoa
-import Carbon
 
 @NSApplicationMain
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -15,46 +15,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @IBOutlet weak var window: NSWindow!
 
     func applicationDidFinishLaunching(_ aNotification: Notification) {
-        
-        let options : NSDictionary = [kAXTrustedCheckOptionPrompt.takeRetainedValue() as NSString: true]
-        let accessibilityEnabled = AXIsProcessTrustedWithOptions(options)
-        
-        if (!accessibilityEnabled) {
-            NSApplication.shared().terminate(self)
+        // First command line argument should be the name of the device to connect to (as it appears in the AirPlay menu).
+        guard CommandLine.arguments.count > 1 else {
+            terminate(withMessage: "Missing argument. Please specify name of device to connec to")
+            return
         }
-        
         let deviceName = CommandLine.arguments[1]
-        
-        if let scriptURL = Bundle.main.url(forResource: "airplay", withExtension: "applescript") {
-            var error: NSDictionary? = nil
-            let script = NSAppleScript(contentsOf: scriptURL, error: &error)
 
-            // Build event to invoke the 'run' handler in the script
-            let handler = NSAppleEventDescriptor.init(eventClass: AEEventClass(kASAppleScriptSuite),
-                                                      eventID: AEEventID(kASSubroutineEvent),
-                                                      targetDescriptor: NSAppleEventDescriptor.null(),
-                                                      returnID: AEReturnID(kAutoGenerateReturnID),
-                                                      transactionID: AETransactionID(kAnyTransactionID))
-            
-            
-            let params = NSAppleEventDescriptor.list()
-            params.insert(NSAppleEventDescriptor(string: deviceName), at: 0)
-            
-            handler.setDescriptor(params, forKeyword: keyDirectObject)
-            handler.setDescriptor(NSAppleEventDescriptor(string: "setAirplay"), forKeyword: AEKeyword(keyASSubroutineName))
-            
-            error = nil
-            let result = script?.executeAppleEvent(handler, error: &error)
-            
-            if result == nil {
-                print("Failed to change AirPlay device")
-                if (error != nil) {
-                    print("\(error)")
-                }
-            }
+        guard let scriptURL = Bundle.main.url(forResource: "airplay", withExtension: "applescript") else {
+            terminate(withMessage: "Missing embedded resource. The application bundle may be corrupt. Please reinstall this application.")
+            return
         }
         
-        NSApplication.shared().terminate(self)
+        let launcher = AppleScriptLauncher(scriptURL: scriptURL)
+        let result = launcher.triggerEvent("setAirPlay", withParams: [deviceName])
+        
+        switch result {
+        case .notTrusted:
+            terminate(withMessage: "This application needs your permission to control UI elements through Accessibility. Please ensure this app is enabled in System Preferences > Security & Privacy > Accessibility.")
+        case .failure:
+            terminate(withMessage: "Failed to change the AirPlay device")
+        case .success:
+            terminate()
+        }
+    }
+    
+    private func terminate(withMessage message: String? = nil) {
+        if let msg = message {
+            print(msg)
+        }
+        NSApplication.shared.terminate(self)
     }
 
 }
